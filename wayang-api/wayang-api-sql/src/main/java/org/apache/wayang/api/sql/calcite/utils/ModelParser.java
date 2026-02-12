@@ -38,11 +38,11 @@ public class ModelParser {
     private final JsonNode json;
 
     public ModelParser() throws IOException, ParseException {
-        final String jsonString = Files
-                .readString(new File("wayang-api/wayang-api-sql/src/main/resources/model.json").toPath());
+        final String calciteModel = "{\"calcite\":" + new Configuration().getStringProperty("wayang.calcite.model")
+                + ",\"separator\":\";\"}";
         final ObjectMapper objectMapper = new ObjectMapper();
 
-        this.json = objectMapper.readTree(jsonString);
+        this.json = objectMapper.readTree(calciteModel);
         this.configuration = null;
     }
 
