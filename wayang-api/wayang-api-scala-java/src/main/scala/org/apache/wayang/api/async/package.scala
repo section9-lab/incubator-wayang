@@ -22,8 +22,12 @@ import org.apache.logging.log4j.{LogManager, Logger}
 import org.apache.wayang.api.serialization.TempFileUtils
 import org.apache.wayang.core.api.exception.WayangException
 
+import java.io.File
+import java.lang.management.ManagementFactory
+import java.net.URLClassLoader
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -105,16 +109,20 @@ package object async {
 
     try {
       val mainClass = "org.apache.wayang.api.async.Main"
-      val classpath = System.getProperty("java.class.path") // get classpath from parent JVM
+      val classpath = classpathFromContextClassLoader()
+      val javaCmd = Paths.get(System.getProperty("java.home"), "bin", "java").toString
+      val moduleAccessArgs = ManagementFactory.getRuntimeMXBean.getInputArguments.asScala
+        .filter(arg => arg.startsWith("--add-opens=") || arg.startsWith("--add-exports="))
 
       // Child process
       val processBuilder = new ProcessBuilder(
-        "java",
+        (Seq(javaCmd) ++ moduleAccessArgs ++ Seq(
         "-cp",
         classpath,
         mainClass,
         operatorPath.toString,
         planBuilderPath.toString
+      )): _*
       )
 
       // Redirect children output to parent output
@@ -126,7 +134,10 @@ package object async {
 
       // And block this future while waiting for it
       blocking {
-        process.waitFor()
+        val exitCode = process.waitFor()
+        if (exitCode != 0) {
+          throw new WayangException(s"Async worker process failed with exit code $exitCode.")
+        }
       }
     }
 
@@ -135,6 +146,19 @@ package object async {
       Files.deleteIfExists(operatorPath)
     }
 
+  }
+
+  private def classpathFromContextClassLoader(): String = {
+    val contextClassLoader = Thread.currentThread().getContextClassLoader
+    contextClassLoader match {
+      case urlClassLoader: URLClassLoader =>
+        urlClassLoader.getURLs
+          .map(_.toURI)
+          .map(Paths.get(_).toString)
+          .mkString(File.pathSeparator)
+      case _ =>
+        System.getProperty("java.class.path")
+    }
   }
 
 }
