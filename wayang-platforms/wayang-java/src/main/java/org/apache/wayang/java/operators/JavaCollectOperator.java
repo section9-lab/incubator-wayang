@@ -58,7 +58,7 @@ public class JavaCollectOperator<Type> extends UnaryToUnaryOperator<Type, Type> 
         final StreamChannel.Instance streamChannelInstance = (StreamChannel.Instance) inputs[0];
         final CollectionChannel.Instance collectionChannelInstance = (CollectionChannel.Instance) outputs[0];
 
-        final List<?> collection = streamChannelInstance.provideStream().collect(Collectors.toList());
+        final List<?> collection = streamChannelInstance.provideStream().toList();
         collectionChannelInstance.accept(collection);
 
         return ExecutionOperator.modelEagerExecution(inputs, outputs, operatorContext);
