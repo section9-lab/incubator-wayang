@@ -123,4 +123,82 @@ class JdbcJoinOperatorTest extends OperatorTestBase {
             sqlQueryChannelInstance.getSqlQuery()
         );
     }
+
+    @Test
+    void testMultiConditionJoinWithHsqldb() throws SQLException {
+        Configuration configuration = new Configuration();
+
+        Job job = mock(Job.class);
+        when(job.getConfiguration()).thenReturn(configuration);
+        when(job.getCrossPlatformExecutor()).thenReturn(new CrossPlatformExecutor(job, new NoInstrumentationStrategy()));
+        SqlQueryChannel.Descriptor sqlChannelDescriptor = HsqldbPlatform.getInstance().getSqlQueryChannelDescriptor();
+
+        HsqldbPlatform hsqldbPlatform = new HsqldbPlatform();
+
+        ExecutionStage sqlStage = mock(ExecutionStage.class);
+
+        // Create test data with multiple join keys
+        try (Connection jdbcConnection = hsqldbPlatform.createDatabaseDescriptor(configuration).createJdbcConnection()) {
+            final Statement statement = jdbcConnection.createStatement();
+            statement.execute("CREATE TABLE orders (order_id INT, customer_id INT, product_id INT, quantity INT);");
+            statement.execute("INSERT INTO orders VALUES (1, 100, 1001, 5);");
+            statement.execute("INSERT INTO orders VALUES (2, 101, 1002, 3);");
+            statement.execute("CREATE TABLE shipments (order_id INT, customer_id INT, ship_date VARCHAR(10));");
+            statement.execute("INSERT INTO shipments VALUES (1, 100, '2024-01-15');");
+            statement.execute("INSERT INTO shipments VALUES (2, 101, '2024-01-16');");
+        }
+
+        JdbcTableSource tableSourceOrders = new HsqldbTableSource("orders");
+        JdbcTableSource tableSourceShipments = new HsqldbTableSource("shipments");
+
+        ExecutionTask tableSourceOrdersTask = new ExecutionTask(tableSourceOrders);
+        tableSourceOrdersTask.setOutputChannel(0, new SqlQueryChannel(sqlChannelDescriptor, tableSourceOrders.getOutput(0)));
+        tableSourceOrdersTask.setStage(sqlStage);
+
+        ExecutionTask tableSourceShipmentsTask = new ExecutionTask(tableSourceShipments);
+        tableSourceShipmentsTask.setOutputChannel(0, new SqlQueryChannel(sqlChannelDescriptor, tableSourceShipments.getOutput(0)));
+        tableSourceShipmentsTask.setStage(sqlStage);
+
+        // Create multi-condition join: JOIN ON orders.order_id = shipments.order_id AND orders.customer_id = shipments.customer_id
+        final ExecutionOperator joinOperator = new HsqldbJoinOperator<Record>(
+            new TransformationDescriptor<Record, Record>(
+                (record) -> new Record(record.getField(0), record.getField(1)),
+                Record.class,
+                Record.class
+            ).withSqlImplementation("orders", "order_id,customer_id"),
+            new TransformationDescriptor<Record, Record>(
+                (record) -> new Record(record.getField(0), record.getField(1)),
+                Record.class,
+                Record.class
+            ).withSqlImplementation("shipments", "order_id,customer_id")
+        );
+
+        ExecutionTask joinTask = new ExecutionTask(joinOperator);
+        tableSourceOrdersTask.getOutputChannel(0).addConsumer(joinTask, 0);
+        tableSourceShipmentsTask.getOutputChannel(0).addConsumer(joinTask, 1);
+        joinTask.setOutputChannel(0, new SqlQueryChannel(sqlChannelDescriptor, joinOperator.getOutput(0)));
+        joinTask.setStage(sqlStage);
+
+        when(sqlStage.getStartTasks()).thenReturn(Collections.singleton(tableSourceOrdersTask));
+        when(sqlStage.getTerminalTasks()).thenReturn(Collections.singleton(joinTask));
+
+        ExecutionStage nextStage = mock(ExecutionStage.class);
+
+        SqlToStreamOperator sqlToStreamOperator = new SqlToStreamOperator(HsqldbPlatform.getInstance());
+        ExecutionTask sqlToStreamTask = new ExecutionTask(sqlToStreamOperator);
+        joinTask.getOutputChannel(0).addConsumer(sqlToStreamTask, 0);
+        sqlToStreamTask.setStage(nextStage);
+
+        JdbcExecutor executor = new JdbcExecutor(HsqldbPlatform.getInstance(), job);
+        executor.execute(sqlStage, new DefaultOptimizationContext(job), job.getCrossPlatformExecutor());
+
+        SqlQueryChannel.Instance sqlQueryChannelInstance =
+                (SqlQueryChannel.Instance) job.getCrossPlatformExecutor().getChannelInstance(sqlToStreamTask.getInputChannel(0));
+
+        // Verify that multi-condition join generates proper SQL with AND
+        assertEquals(
+            "SELECT * FROM orders JOIN shipments ON orders.order_id=shipments.order_id AND orders.customer_id=shipments.customer_id;",
+            sqlQueryChannelInstance.getSqlQuery()
+        );
+    }
 }
