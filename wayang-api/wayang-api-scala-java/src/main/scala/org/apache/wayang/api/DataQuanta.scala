@@ -34,12 +34,13 @@ import org.apache.wayang.core.optimizer.ProbabilisticDoubleInterval
 import org.apache.wayang.core.optimizer.cardinality.CardinalityEstimator
 import org.apache.wayang.core.optimizer.costs.LoadProfileEstimator
 import org.apache.wayang.core.plan.wayangplan._
+import org.apache.wayang.core.api.spatial.{SpatialGeometry, SpatialPredicate}
 import org.apache.wayang.core.platform.Platform
 import org.apache.wayang.core.util.{Tuple => WayangTuple}
 import org.apache.wayang.basic.data.{Record, Tuple2 => WayangTuple2}
-import org.apache.wayang.basic.model.{DLModel, LogisticRegressionModel,DecisionTreeRegressionModel};
+import org.apache.wayang.basic.model.{DLModel, LogisticRegressionModel,DecisionTreeRegressionModel}
 import org.apache.wayang.commons.util.profiledb.model.Experiment
-import com.google.protobuf.ByteString;
+import com.google.protobuf.ByteString
 import org.apache.wayang.api.python.function._
 import org.tensorflow.ndarray.NdArray
 
@@ -630,6 +631,81 @@ class DataQuanta[Out: ClassTag](val operator: ElementaryOperator, outputIndex: I
     this.connectTo(joinOperator, 0)
     that.connectTo(joinOperator, 1)
     joinOperator
+  }
+
+  /**
+    * Applies a spatial filter to this instance.
+    *
+    * @param keySelector    UDF to extract spatial geometry from data quanta
+    * @param predicateType  the spatial predicate type
+    * @param filterGeometry the geometry to filter against
+    * @param columnName     optional SQL column name for database pushdown
+    * @return a new instance representing the filtered output
+    */
+  def spatialFilter(keySelector: Out => SpatialGeometry,
+                    predicateType: SpatialPredicate,
+                    filterGeometry: SpatialGeometry,
+                    columnName: String = null): DataQuanta[Out] =
+    spatialFilterJava(toSerializableFunction(keySelector), predicateType, filterGeometry, columnName)
+
+  /**
+    * Applies a spatial filter to this instance.
+    *
+    * @param keySelector    UDF to extract spatial geometry from data quanta
+    * @param predicateType  the spatial predicate type
+    * @param filterGeometry the geometry to filter against
+    * @param columnName     optional SQL column name for database pushdown
+    * @return a new instance representing the filtered output
+    */
+  def spatialFilterJava(keySelector: SerializableFunction[Out, _ <: SpatialGeometry],
+                        predicateType: SpatialPredicate,
+                        filterGeometry: SpatialGeometry,
+                        columnName: String = null): DataQuanta[Out] = {
+    val op = new SpatialFilterOperator(predicateType, keySelector, dataSetType[Out], filterGeometry)
+    if (columnName != null) op.getKeyDescriptor.withSqlImplementation(null, columnName)
+    this.connectTo(op, 0)
+    wrap[Out](op)
+  }
+
+  /**
+    * Feeds this and a further instance into a [[SpatialJoinOperator]].
+    *
+    * @param thisKeyUdf    UDF to extract spatial geometry from this instance's elements
+    * @param that          the other instance
+    * @param thatKeyUdf    UDF to extract spatial geometry from `that` instance's elements
+    * @param predicateType the spatial predicate type for the join
+    * @return a new instance representing the SpatialJoinOperator's output
+    */
+  def spatialJoin[ThatOut: ClassTag](
+      thisKeyUdf: Out => SpatialGeometry,
+      that: DataQuanta[ThatOut],
+      thatKeyUdf: ThatOut => SpatialGeometry,
+      predicateType: SpatialPredicate): DataQuanta[WayangTuple2[Out, ThatOut]] =
+    spatialJoinJava(toSerializableFunction(thisKeyUdf), that, toSerializableFunction(thatKeyUdf), predicateType)
+
+  /**
+    * Feeds this and a further instance into a [[SpatialJoinOperator]].
+    *
+    * @param thisKeyUdf    UDF to extract spatial geometry from this instance's elements
+    * @param that          the other instance
+    * @param thatKeyUdf    UDF to extract spatial geometry from `that` instance's elements
+    * @param predicateType the spatial predicate type for the join
+    * @return a new instance representing the SpatialJoinOperator's output
+    */
+  def spatialJoinJava[ThatOut: ClassTag](
+      thisKeyUdf: SerializableFunction[Out, _ <: SpatialGeometry],
+      that: DataQuanta[ThatOut],
+      thatKeyUdf: SerializableFunction[ThatOut, _ <: SpatialGeometry],
+      predicateType: SpatialPredicate): DataQuanta[WayangTuple2[Out, ThatOut]] = {
+    require(this.planBuilder eq that.planBuilder, s"$this and $that must use the same plan builders.")
+    val op = new SpatialJoinOperator(
+      new TransformationDescriptor(thisKeyUdf.asInstanceOf[SerializableFunction[Out, SpatialGeometry]], basicDataUnitType[Out], basicDataUnitType[SpatialGeometry]),
+      new TransformationDescriptor(thatKeyUdf.asInstanceOf[SerializableFunction[ThatOut, SpatialGeometry]], basicDataUnitType[ThatOut], basicDataUnitType[SpatialGeometry]),
+      predicateType
+    )
+    this.connectTo(op, 0)
+    that.connectTo(op, 1)
+    wrap[WayangTuple2[Out, ThatOut]](op)
   }
 
   def predict[ThatOut: ClassTag](
