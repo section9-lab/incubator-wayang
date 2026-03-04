@@ -70,16 +70,12 @@ public class GenericJdbcTableSource extends JdbcTableSource implements GenericJd
     @Override
     public CardinalityEstimator getCardinalityEstimator(int outputIndex) {
         assert outputIndex == 0;
-
         return new CardinalityEstimator() {
             @Override
             public CardinalityEstimate estimate(OptimizationContext optimizationContext, CardinalityEstimate... inputEstimates) {
 
                 final TimeMeasurement timeMeasurement = optimizationContext.getJob().getStopWatch().start(
-                        "Optimization",
-                        "Cardinality&Load Estimation",
-                        "Push Estimation",
-                        "Estimate source cardinalities"
+                        "Optimization", "Cardinality&Load Estimation", "Push Estimation", "Estimate source cardinalities"
                 );
 
                 try (Connection connection = GenericJdbcPlatform.getInstance()
@@ -87,8 +83,7 @@ public class GenericJdbcTableSource extends JdbcTableSource implements GenericJd
                         .createJdbcConnection()) {
 
                     final String sql = String.format(
-                            "SELECT count(*) FROM %s;",
-                            GenericJdbcTableSource.this.getTableName()
+                            "SELECT count(*) FROM %s;", GenericJdbcTableSource.this.getTableName()
                     );
 
                     final ResultSet resultSet = connection.createStatement().executeQuery(sql);
@@ -96,17 +91,13 @@ public class GenericJdbcTableSource extends JdbcTableSource implements GenericJd
                     if (!resultSet.next()) {
                         throw new SQLException("No query result for \"" + sql + "\".");
                     }
-
                     long cardinality = resultSet.getLong(1);
-
                     return new CardinalityEstimate(cardinality, cardinality, 1d);
 
                 } catch (Exception e) {
 
                     LogManager.getLogger(this.getClass()).error(
-                            "Could not estimate cardinality for {}.",
-                            GenericJdbcTableSource.this,
-                            e
+                            "Could not estimate cardinality for {}.", GenericJdbcTableSource.this, e
                     );
 
                     return new CardinalityEstimate(10, 10000000, 0.9);

@@ -21,11 +21,10 @@ package org.apache.wayang.genericjdbc.operators;
 import org.apache.wayang.basic.data.Record;
 import org.apache.wayang.core.api.Configuration;
 import org.apache.wayang.core.api.Job;
-import org.apache.wayang.core.function.TransformationDescriptor;
+import org.apache.wayang.core.function.PredicateDescriptor;
 import org.apache.wayang.core.optimizer.DefaultOptimizationContext;
 import org.apache.wayang.core.plan.executionplan.ExecutionStage;
 import org.apache.wayang.core.plan.executionplan.ExecutionTask;
-import org.apache.wayang.core.plan.wayangplan.ExecutionOperator;
 import org.apache.wayang.core.platform.CrossPlatformExecutor;
 import org.apache.wayang.core.profiling.NoInstrumentationStrategy;
 import org.apache.wayang.genericjdbc.platform.GenericJdbcPlatform;
@@ -40,10 +39,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-class GenericJdbcJoinOperatorTest {
+class GenericJdbcFilterOperatorTest {
 
     @Test
-    void testJoinSqlGeneration() {
+    void testFilterExecution() {
 
         Configuration configuration = new Configuration();
 
@@ -58,57 +57,49 @@ class GenericJdbcJoinOperatorTest {
 
         ExecutionStage sqlStage = mock(ExecutionStage.class);
 
-        GenericJdbcTableSource tableSourceA = new GenericJdbcTableSource("T1", "A", "VAL1");
-        GenericJdbcTableSource tableSourceB = new GenericJdbcTableSource("T2", "A", "VAL2");
+        GenericJdbcTableSource tableSource =
+                new GenericJdbcTableSource("T1", "A", "VAL1");
 
-        ExecutionTask tableSourceATask = new ExecutionTask(tableSourceA);
-        tableSourceATask.setOutputChannel(
+        ExecutionTask tableSourceTask = new ExecutionTask(tableSource);
+        tableSourceTask.setOutputChannel(
                 0,
-                new SqlQueryChannel(sqlChannelDescriptor, tableSourceA.getOutput(0))
+                new SqlQueryChannel(sqlChannelDescriptor, tableSource.getOutput(0))
         );
-        tableSourceATask.setStage(sqlStage);
+        tableSourceTask.setStage(sqlStage);
 
-        ExecutionTask tableSourceBTask = new ExecutionTask(tableSourceB);
-        tableSourceBTask.setOutputChannel(
+        GenericJdbcFilterOperator filterOperator =
+                new GenericJdbcFilterOperator(
+                        new PredicateDescriptor<>(
+                                record -> (Integer) record.getField(0) > 0,
+                                Record.class
+                        ).withSqlImplementation("A > 0")
+                );
+
+        ExecutionTask filterTask = new ExecutionTask(filterOperator);
+
+        tableSourceTask.getOutputChannel(0).addConsumer(filterTask, 0);
+
+        filterTask.setOutputChannel(
                 0,
-                new SqlQueryChannel(sqlChannelDescriptor, tableSourceB.getOutput(0))
+                new SqlQueryChannel(sqlChannelDescriptor, filterOperator.getOutput(0))
         );
-        tableSourceBTask.setStage(sqlStage);
+        filterTask.setStage(sqlStage);
 
-        ExecutionOperator joinOperator = new GenericJdbcJoinOperator<Integer>(
-                new TransformationDescriptor<Record, Integer>(
-                        record -> (Integer) record.getField(0),
-                        Record.class,
-                        Integer.class
-                ).withSqlImplementation("T1", "A"),
-                new TransformationDescriptor<Record, Integer>(
-                        record -> (Integer) record.getField(0),
-                        Record.class,
-                        Integer.class
-                ).withSqlImplementation("T2", "A")
-        );
+        when(sqlStage.getStartTasks())
+                .thenReturn(Collections.singleton(tableSourceTask));
 
-        ExecutionTask joinTask = new ExecutionTask(joinOperator);
+        when(sqlStage.getTerminalTasks())
+                .thenReturn(Collections.singleton(filterTask));
 
-        tableSourceATask.getOutputChannel(0).addConsumer(joinTask, 0);
-        tableSourceBTask.getOutputChannel(0).addConsumer(joinTask, 1);
-
-        joinTask.setOutputChannel(
-                0,
-                new SqlQueryChannel(sqlChannelDescriptor, joinOperator.getOutput(0))
-        );
-        joinTask.setStage(sqlStage);
-
-        when(sqlStage.getStartTasks()).thenReturn(Collections.singleton(tableSourceATask));
-        when(sqlStage.getTerminalTasks()).thenReturn(Collections.singleton(joinTask));
-
-        // Add SqlToStreamOperator stage (required by JdbcExecutor)
         ExecutionStage nextStage = mock(ExecutionStage.class);
 
-        SqlToStreamOperator sqlToStreamOperator = new SqlToStreamOperator(platform);
-        ExecutionTask sqlToStreamTask = new ExecutionTask(sqlToStreamOperator);
+        SqlToStreamOperator sqlToStreamOperator =
+                new SqlToStreamOperator(platform);
 
-        joinTask.getOutputChannel(0).addConsumer(sqlToStreamTask, 0);
+        ExecutionTask sqlToStreamTask =
+                new ExecutionTask(sqlToStreamOperator);
+
+        filterTask.getOutputChannel(0).addConsumer(sqlToStreamTask, 0);
         sqlToStreamTask.setStage(nextStage);
 
         JdbcExecutor executor = new JdbcExecutor(platform, job);
@@ -126,7 +117,6 @@ class GenericJdbcJoinOperatorTest {
 
         String sql = sqlQueryChannelInstance.getSqlQuery();
 
-        assertTrue(sql.contains("JOIN"));
-        assertTrue(sql.contains("ON"));
+        assertTrue(sql.contains("WHERE"));
     }
 }
