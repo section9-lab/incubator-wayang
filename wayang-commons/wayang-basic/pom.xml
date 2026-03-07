@@ -121,11 +121,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.calcite</groupId>
-            <artifactId>calcite-core</artifactId>
-            <version>${calcite.version}</version>
-        </dependency>
-        <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-storage-blob</artifactId>
         </dependency>

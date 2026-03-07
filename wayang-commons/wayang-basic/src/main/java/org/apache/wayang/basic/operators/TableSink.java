@@ -52,8 +52,11 @@ public class TableSink<T> extends UnarySink<T> {
     public TableSink(Properties props, String mode, String tableName, String[] columnNames, DataSetType<T> type) {
         super(type);
         this.tableName = tableName;
-        this.columnNames = columnNames;
-        this.props = props;
+        this.columnNames = columnNames == null ? null : java.util.Arrays.copyOf(columnNames, columnNames.length);
+        this.props = new Properties();
+        if (props != null) {
+            this.props.putAll(props);
+        }
         this.mode = mode;
     }
 
@@ -75,15 +78,17 @@ public class TableSink<T> extends UnarySink<T> {
     }
 
     protected void setColumnNames(String[] columnNames) {
-        this.columnNames = columnNames;
+        this.columnNames = columnNames == null ? null : java.util.Arrays.copyOf(columnNames, columnNames.length);
     }
 
     public String[] getColumnNames() {
-        return this.columnNames;
+        return this.columnNames == null ? null : java.util.Arrays.copyOf(this.columnNames, this.columnNames.length);
     }
 
     public Properties getProperties() {
-        return this.props;
+        Properties copy = new Properties();
+        copy.putAll(this.props);
+        return copy;
     }
 
     public String getMode() {

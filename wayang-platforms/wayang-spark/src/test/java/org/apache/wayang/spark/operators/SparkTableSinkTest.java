@@ -18,14 +18,9 @@
 package org.apache.wayang.spark.operators;
 
 import org.apache.wayang.basic.data.Record;
-import org.apache.wayang.core.api.Configuration;
-import org.apache.wayang.core.api.Job;
-import org.apache.wayang.core.optimizer.OptimizationContext;
-import org.apache.wayang.core.plan.wayangplan.OutputSlot;
 import org.apache.wayang.core.platform.ChannelInstance;
 import org.apache.wayang.core.types.DataSetType;
 import org.apache.wayang.spark.channels.RddChannel;
-import org.apache.wayang.spark.platform.SparkPlatform;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,8 +35,6 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Test suite for {@link SparkTableSink}.
@@ -64,7 +57,7 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
     void teardownTest() throws Exception {
         if (connection != null && !connection.isClosed()) {
             try (Statement stmt = connection.createStatement()) {
-                stmt.execute("DROP TABLE IF EXISTS " + TABLE_NAME);
+                stmt.execute("DROP TABLE IF EXISTS \"" + TABLE_NAME + "\"");
             }
             connection.close();
         }
@@ -72,7 +65,6 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
 
     @Test
     void testWritingRecordToH2() throws Exception {
-        Configuration configuration = new Configuration();
         Properties dbProps = new Properties();
         dbProps.setProperty("url", JDBC_URL);
         dbProps.setProperty("user", "sa");
@@ -83,9 +75,6 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
                 new String[] { "id", "name", "value" },
                 DataSetType.createDefault(Record.class));
 
-        Job job = mock(Job.class);
-        when(job.getConfiguration()).thenReturn(configuration);
-
         Record record1 = new Record(1, "Alice", 100.5);
         Record record2 = new Record(2, "Bob", 200.75);
 
@@ -95,7 +84,7 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { inputChannelInstance }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + TABLE_NAME)) {
+                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM \"" + TABLE_NAME + "\"")) {
             rs.next();
             assertEquals(2, rs.getInt(1));
         }
@@ -103,7 +92,6 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
 
     @Test
     void testWritingPojoToH2() throws Exception {
-        Configuration configuration = new Configuration();
         Properties dbProps = new Properties();
         dbProps.setProperty("url", JDBC_URL);
         dbProps.setProperty("user", "sa");
@@ -111,11 +99,8 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
         dbProps.setProperty("driver", DRIVER);
 
         SparkTableSink<TestPojo> sink = new SparkTableSink<>(dbProps, "overwrite", TABLE_NAME,
-                null, // schema detected via reflection
+                null,
                 DataSetType.createDefault(TestPojo.class));
-
-        Job job = mock(Job.class);
-        when(job.getConfiguration()).thenReturn(configuration);
 
         TestPojo p1 = new TestPojo(1, "Alice");
         TestPojo p2 = new TestPojo(2, "Bob");
@@ -126,7 +111,7 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { inputChannelInstance }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT * FROM " + TABLE_NAME + " ORDER BY \"id\"")) {
+                ResultSet rs = stmt.executeQuery("SELECT * FROM \"" + TABLE_NAME + "\" ORDER BY \"id\"")) {
             rs.next();
             assertEquals(1, rs.getInt("id"));
             assertEquals("Alice", rs.getString("name"));
@@ -138,14 +123,13 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
 
     @Test
     void testAppendMode() throws Exception {
-        Configuration configuration = new Configuration();
         Properties dbProps = new Properties();
         dbProps.setProperty("url", JDBC_URL);
         dbProps.setProperty("user", "sa");
         dbProps.setProperty("password", "");
         dbProps.setProperty("driver", DRIVER);
 
-        // 1. Initial write (overwrite)
+        // 1. Initial write
         SparkTableSink<Record> sink1 = new SparkTableSink<>(dbProps, "overwrite", TABLE_NAME,
                 new String[] { "id", "name" },
                 DataSetType.createDefault(Record.class));
@@ -162,7 +146,7 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
         evaluate(sink2, new ChannelInstance[] { input2 }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + TABLE_NAME)) {
+                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM \"" + TABLE_NAME + "\"")) {
             rs.next();
             assertEquals(2, rs.getInt(1));
         }
@@ -170,20 +154,19 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
 
     @Test
     void testOverwriteWithSchemaMismatch() throws Exception {
-        Configuration configuration = new Configuration();
         Properties dbProps = new Properties();
         dbProps.setProperty("url", JDBC_URL);
         dbProps.setProperty("user", "sa");
         dbProps.setProperty("password", "");
         dbProps.setProperty("driver", DRIVER);
 
-        // 1. Create table with old schema (id, name)
+        // 1. Create table with old schema
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE TABLE " + TABLE_NAME + " (\"id\" INT, \"name\" VARCHAR(255))");
             stmt.execute("INSERT INTO " + TABLE_NAME + " VALUES (1, 'Old')");
         }
 
-        // 2. Overwrite with new schema (id, age, city)
+        // 2. Overwrite with new schema
         SparkTableSink<Record> sink = new SparkTableSink<>(dbProps, "overwrite", TABLE_NAME,
                 new String[] { "id", "age", "city" },
                 DataSetType.createDefault(Record.class));
@@ -192,7 +175,7 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { input }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT * FROM " + TABLE_NAME)) {
+                ResultSet rs = stmt.executeQuery("SELECT * FROM \"" + TABLE_NAME + "\"")) {
             rs.next();
             assertEquals(2, rs.getInt("id"));
             assertEquals(30, rs.getInt("age"));
@@ -211,7 +194,6 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
 
     @Test
     void testNullValues() throws Exception {
-        Configuration configuration = new Configuration();
         Properties dbProps = new Properties();
         dbProps.setProperty("url", JDBC_URL);
         dbProps.setProperty("user", "sa");
@@ -226,7 +208,7 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { input }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT \"name\" FROM " + TABLE_NAME + " WHERE \"id\" = 1")) {
+                ResultSet rs = stmt.executeQuery("SELECT \"name\" FROM \"" + TABLE_NAME + "\" WHERE \"id\" = 1")) {
             rs.next();
             assertEquals(null, rs.getString(1));
             assertTrue(rs.wasNull());
@@ -235,7 +217,6 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
 
     @Test
     void testSupportedTypes() throws Exception {
-        Configuration configuration = new Configuration();
         Properties dbProps = new Properties();
         dbProps.setProperty("url", JDBC_URL);
         dbProps.setProperty("user", "sa");
@@ -250,7 +231,7 @@ class SparkTableSinkTest extends SparkOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { input }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT * FROM " + TABLE_NAME + " WHERE \"id\" = 1")) {
+                ResultSet rs = stmt.executeQuery("SELECT * FROM \"" + TABLE_NAME + "\" WHERE \"id\" = 1")) {
             rs.next();
             assertTrue(rs.getBoolean("is_active"));
             assertEquals(5000.50, rs.getDouble("salary"), 0.001);

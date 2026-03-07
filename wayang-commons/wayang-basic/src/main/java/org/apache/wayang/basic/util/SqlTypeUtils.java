@@ -18,10 +18,7 @@
 
 package org.apache.wayang.basic.util;
 
-import org.apache.calcite.sql.SqlDialect;
 import org.apache.wayang.basic.data.Record;
-
-import java.lang.reflect.Field;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -36,7 +33,7 @@ import java.util.Map;
  */
 public class SqlTypeUtils {
 
-    private static final Map<SqlDialect.DatabaseProduct, Map<Class<?>, String>> dialectTypeMaps = new HashMap<>();
+    private static final Map<DatabaseProduct, Map<Class<?>, String>> dialectTypeMaps = new HashMap<>();
 
     static {
         // Default mappings (Standard SQL)
@@ -57,13 +54,13 @@ public class SqlTypeUtils {
         defaultMap.put(Timestamp.class, "TIMESTAMP");
         defaultMap.put(LocalDateTime.class, "TIMESTAMP");
 
-        dialectTypeMaps.put(SqlDialect.DatabaseProduct.UNKNOWN, defaultMap);
+        dialectTypeMaps.put(DatabaseProduct.UNKNOWN, defaultMap);
 
         // PostgreSQL Overrides
         Map<Class<?>, String> pgMap = new HashMap<>(defaultMap);
         pgMap.put(Double.class, "DOUBLE PRECISION");
         pgMap.put(double.class, "DOUBLE PRECISION");
-        dialectTypeMaps.put(SqlDialect.DatabaseProduct.POSTGRESQL, pgMap);
+        dialectTypeMaps.put(DatabaseProduct.POSTGRESQL, pgMap);
 
         // Add more dialects here as needed (MySQL, Oracle, etc.)
     }
@@ -74,30 +71,26 @@ public class SqlTypeUtils {
      * @param url JDBC URL
      * @return detected DatabaseProduct
      */
-    public static SqlDialect.DatabaseProduct detectProduct(String url) {
+    public static DatabaseProduct detectProduct(String url) {
         if (url == null)
-            return SqlDialect.DatabaseProduct.UNKNOWN;
+            return DatabaseProduct.UNKNOWN;
         String lowerUrl = url.toLowerCase();
         if (lowerUrl.contains("postgresql") || lowerUrl.contains("postgres"))
-            return SqlDialect.DatabaseProduct.POSTGRESQL;
+            return DatabaseProduct.POSTGRESQL;
         if (lowerUrl.contains("mysql"))
-            return SqlDialect.DatabaseProduct.MYSQL;
+            return DatabaseProduct.MYSQL;
         if (lowerUrl.contains("oracle"))
-            return SqlDialect.DatabaseProduct.ORACLE;
+            return DatabaseProduct.ORACLE;
         if (lowerUrl.contains("sqlite")) {
-            try {
-                return SqlDialect.DatabaseProduct.valueOf("SQLITE");
-            } catch (Exception e) {
-                return SqlDialect.DatabaseProduct.UNKNOWN;
-            }
+            return DatabaseProduct.SQLITE;
         }
         if (lowerUrl.contains("h2"))
-            return SqlDialect.DatabaseProduct.H2;
+            return DatabaseProduct.H2;
         if (lowerUrl.contains("derby"))
-            return SqlDialect.DatabaseProduct.DERBY;
+            return DatabaseProduct.DERBY;
         if (lowerUrl.contains("mssql") || lowerUrl.contains("sqlserver"))
-            return SqlDialect.DatabaseProduct.MSSQL;
-        return SqlDialect.DatabaseProduct.UNKNOWN;
+            return DatabaseProduct.MSSQL;
+        return DatabaseProduct.UNKNOWN;
     }
 
     /**
@@ -107,9 +100,9 @@ public class SqlTypeUtils {
      * @param product database product
      * @return SQL type string
      */
-    public static String getSqlType(Class<?> cls, SqlDialect.DatabaseProduct product) {
+    public static String getSqlType(Class<?> cls, DatabaseProduct product) {
         Map<Class<?>, String> typeMap = dialectTypeMaps.getOrDefault(product,
-                dialectTypeMaps.get(SqlDialect.DatabaseProduct.UNKNOWN));
+                dialectTypeMaps.get(DatabaseProduct.UNKNOWN));
         return typeMap.getOrDefault(cls, "VARCHAR(255)");
     }
 
@@ -120,7 +113,7 @@ public class SqlTypeUtils {
      * @param product database product
      * @return a list of schema fields
      */
-    public static List<SchemaField> getSchema(Class<?> cls, SqlDialect.DatabaseProduct product) {
+    public static List<SchemaField> getSchema(Class<?> cls, DatabaseProduct product) {
         List<SchemaField> schema = new ArrayList<>();
         if (cls == Record.class) {
             // For Record.class without an instance, we can't derive names/types easily
@@ -128,12 +121,29 @@ public class SqlTypeUtils {
             return schema;
         }
 
-        for (Field field : cls.getDeclaredFields()) {
-            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+        for (java.lang.reflect.Method method : cls.getMethods()) {
+            if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) ||
+                    method.getParameterCount() > 0 ||
+                    method.getReturnType() == void.class ||
+                    method.getName().equals("getClass")) {
                 continue;
             }
-            schema.add(new SchemaField(field.getName(), field.getType(), getSqlType(field.getType(), product)));
+
+            String name = method.getName();
+            String propertyName = null;
+            if (name.startsWith("get") && name.length() > 3) {
+                propertyName = Character.toLowerCase(name.charAt(3)) + name.substring(4);
+            } else if (name.startsWith("is") && name.length() > 2
+                    && (method.getReturnType() == boolean.class || method.getReturnType() == Boolean.class)) {
+                propertyName = Character.toLowerCase(name.charAt(2)) + name.substring(3);
+            }
+
+            if (propertyName != null) {
+                schema.add(new SchemaField(propertyName, method.getReturnType(),
+                        getSqlType(method.getReturnType(), product)));
+            }
         }
+        schema.sort(java.util.Comparator.comparing(SchemaField::getName));
         return schema;
     }
 
@@ -145,7 +155,7 @@ public class SqlTypeUtils {
      * @param userNames optional user-provided column names
      * @return a list of schema fields
      */
-    public static List<SchemaField> getSchema(Record record, SqlDialect.DatabaseProduct product, String[] userNames) {
+    public static List<SchemaField> getSchema(Record record, DatabaseProduct product, String[] userNames) {
         List<SchemaField> schema = new ArrayList<>();
         if (record == null)
             return schema;

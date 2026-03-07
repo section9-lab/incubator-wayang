@@ -20,6 +20,7 @@ package org.apache.wayang.java.operators;
 
 import org.apache.wayang.basic.data.Record;
 import org.apache.wayang.basic.operators.TableSink;
+import org.apache.wayang.basic.util.DatabaseProduct;
 import org.apache.wayang.basic.util.SqlTypeUtils;
 import org.apache.wayang.core.optimizer.OptimizationContext;
 import org.apache.wayang.core.plan.wayangplan.ExecutionOperator;
@@ -97,20 +98,26 @@ public class JavaTableSink<T> extends TableSink<T> implements JavaExecutionOpera
         assert outputs.length == 0;
         JavaChannelInstance input = (JavaChannelInstance) inputs[0];
 
-        // The stream is converted to an Iterator so that we can read the first element
-        // w/o consuming the entire stream.
         Iterator<T> recordIterator = input.<T>provideStream().iterator();
 
         if (!recordIterator.hasNext()) {
             return ExecutionOperator.modelEagerExecution(inputs, outputs, operatorContext);
         }
 
-        // We read the first element to derive the Record schema.
         T firstElement = recordIterator.next();
         Class<?> typeClass = this.getType().getDataUnitType().getTypeClass();
 
+        if (typeClass == Record.class && this.getColumnNames() != null) {
+            Record r = (Record) firstElement;
+            if (r.size() < this.getColumnNames().length) {
+                throw new org.apache.wayang.core.api.exception.WayangException(
+                        String.format("Record length (%d) is less than expected column count (%d)",
+                                r.size(), this.getColumnNames().length));
+            }
+        }
+
         String url = this.getProperties().getProperty("url");
-        org.apache.calcite.sql.SqlDialect.DatabaseProduct product = SqlTypeUtils.detectProduct(url);
+        DatabaseProduct product = SqlTypeUtils.detectProduct(url);
 
         List<SqlTypeUtils.SchemaField> schemaFields;
         if (typeClass != Record.class) {
@@ -130,7 +137,7 @@ public class JavaTableSink<T> extends TableSink<T> implements JavaExecutionOpera
 
         String[] sqlTypes = new String[currentColumnNames.length];
         for (int i = 0; i < currentColumnNames.length; i++) {
-            sqlTypes[i] = "VARCHAR(255)"; // Default
+            sqlTypes[i] = "VARCHAR(255)";
             for (SqlTypeUtils.SchemaField field : schemaFields) {
                 if (field.getName().equals(currentColumnNames[i])) {
                     sqlTypes[i] = field.getSqlType();
@@ -142,72 +149,80 @@ public class JavaTableSink<T> extends TableSink<T> implements JavaExecutionOpera
         final String[] finalColumnNames = currentColumnNames;
         final String[] finalSqlTypes = sqlTypes;
 
-        this.getProperties().setProperty("streamingBatchInsert", "True");
+        Properties writeProps = this.getProperties();
+        writeProps.setProperty("streamingBatchInsert", "True");
 
-        Connection conn;
         try {
-            Class.forName(this.getProperties().getProperty("driver"));
-            conn = DriverManager.getConnection(this.getProperties().getProperty("url"), this.getProperties());
-            conn.setAutoCommit(false);
+            Class.forName(writeProps.getProperty("driver"));
+            String quote = (product == DatabaseProduct.MYSQL) ? "`"
+                    : (product == DatabaseProduct.MSSQL) ? "[" : "\"";
+            String closingQuote = (product == DatabaseProduct.MSSQL) ? "]" : quote;
 
-            Statement stmt = conn.createStatement();
+            try (Connection conn = DriverManager.getConnection(writeProps.getProperty("url"), writeProps)) {
+                conn.setAutoCommit(false);
+                try (Statement stmt = conn.createStatement()) {
+                    if (this.getMode().equals("overwrite")) {
+                        stmt.execute("DROP TABLE IF EXISTS " + quote + this.getTableName() + closingQuote);
+                    }
 
-            // Drop existing table if the mode is 'overwrite'.
-            if (this.getMode().equals("overwrite")) {
-                stmt.execute("DROP TABLE IF EXISTS " + this.getTableName());
-            }
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("CREATE TABLE IF NOT EXISTS ").append(quote).append(this.getTableName())
+                            .append(closingQuote).append(" (");
+                    String separator = "";
+                    for (int i = 0; i < finalColumnNames.length; i++) {
+                        sb.append(separator).append(quote).append(finalColumnNames[i]).append(closingQuote).append(" ")
+                                .append(finalSqlTypes[i]);
+                        separator = ", ";
+                    }
+                    sb.append(")");
+                    stmt.execute(sb.toString());
 
-            // Create a new table if the specified table name does not exist yet.
-            StringBuilder sb = new StringBuilder();
-            sb.append("CREATE TABLE IF NOT EXISTS ").append(this.getTableName()).append(" (");
-            String separator = "";
-            for (int i = 0; i < finalColumnNames.length; i++) {
-                sb.append(separator).append("\"").append(finalColumnNames[i]).append("\" ").append(finalSqlTypes[i]);
-                separator = ", ";
-            }
-            sb.append(")");
-            stmt.execute(sb.toString());
+                    sb = new StringBuilder();
+                    sb.append("INSERT INTO ").append(quote).append(this.getTableName()).append(closingQuote)
+                            .append(" (");
+                    separator = "";
+                    for (int i = 0; i < finalColumnNames.length; i++) {
+                        sb.append(separator).append(quote).append(finalColumnNames[i]).append(closingQuote);
+                        separator = ", ";
+                    }
+                    sb.append(") VALUES (");
+                    separator = "";
+                    for (int i = 0; i < finalColumnNames.length; i++) {
+                        sb.append(separator).append("?");
+                        separator = ", ";
+                    }
+                    sb.append(")");
 
-            // Create a prepared statement to insert value from the recordIterator.
-            sb = new StringBuilder();
-            sb.append("INSERT INTO ").append(this.getTableName()).append(" (");
-            separator = "";
-            for (int i = 0; i < finalColumnNames.length; i++) {
-                sb.append(separator).append("\"").append(finalColumnNames[i]).append("\"");
-                separator = ", ";
-            }
-            sb.append(") VALUES (");
-            separator = "";
-            for (int i = 0; i < finalColumnNames.length; i++) {
-                sb.append(separator).append("?");
-                separator = ", ";
-            }
-            sb.append(")");
-            PreparedStatement ps = conn.prepareStatement(sb.toString());
-
-            // The schema Record has to be pushed to the database too.
-            this.pushToStatement(ps, firstElement, typeClass, finalColumnNames);
-            ps.addBatch();
-
-            // Iterate through all remaining records and add them to the prepared statement
-            recordIterator.forEachRemaining(
-                    r -> {
+                    try (PreparedStatement ps = conn.prepareStatement(sb.toString())) {
                         try {
-                            this.pushToStatement(ps, r, typeClass, finalColumnNames);
+                            this.pushToStatement(ps, firstElement, typeClass, finalColumnNames);
                             ps.addBatch();
-                        } catch (SQLException e) {
-                            e.printStackTrace();
-                        }
-                    });
 
-            ps.executeBatch();
-            conn.commit();
-            conn.close();
+                            recordIterator.forEachRemaining(
+                                    r -> {
+                                        try {
+                                            this.pushToStatement(ps, r, typeClass, finalColumnNames);
+                                            ps.addBatch();
+                                        } catch (SQLException e) {
+                                            throw new RuntimeException("Failed to process record for batch insert", e);
+                                        }
+                                    });
+
+                            ps.executeBatch();
+                            conn.commit();
+                        } catch (Exception e) {
+                            conn.rollback();
+                            throw e;
+                        }
+                    }
+                }
+            }
         } catch (ClassNotFoundException e) {
-            System.out.println("Please specify a correct database driver.");
-            e.printStackTrace();
+            throw new org.apache.wayang.core.api.exception.WayangException("Could not find database driver", e);
         } catch (SQLException e) {
-            e.printStackTrace();
+            throw new org.apache.wayang.core.api.exception.WayangException("Database operation failed", e);
+        } catch (Exception e) {
+            throw new org.apache.wayang.core.api.exception.WayangException("Failed to evaluate JavaTableSink", e);
         }
 
         return ExecutionOperator.modelEagerExecution(inputs, outputs, operatorContext);
@@ -217,6 +232,11 @@ public class JavaTableSink<T> extends TableSink<T> implements JavaExecutionOpera
             throws SQLException {
         if (typeClass == Record.class) {
             Record r = (Record) element;
+            if (r.size() < columnNames.length) {
+                throw new org.apache.wayang.core.api.exception.WayangException(
+                        String.format("Record length (%d) is less than expected column count (%d)", r.size(),
+                                columnNames.length));
+            }
             for (int i = 0; i < columnNames.length; i++) {
                 setRecordValue(ps, i + 1, r.getField(i));
             }

@@ -30,6 +30,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.wayang.basic.data.Record;
 import org.apache.wayang.basic.operators.TableSink;
+import org.apache.wayang.basic.util.DatabaseProduct;
 import org.apache.wayang.basic.util.SqlTypeUtils;
 import org.apache.wayang.core.api.exception.WayangException;
 import org.apache.wayang.core.optimizer.OptimizationContext;
@@ -82,21 +83,18 @@ public class SparkTableSink<T> extends TableSink<T> implements SparkExecutionOpe
 
         Dataset<Row> df;
         if (typeClass == Record.class) {
-            // Records need manual schema handling
-            if (recordRDD.isEmpty()) {
+            List<T> sample = recordRDD.take(1);
+            if (sample.isEmpty()) {
                 return ExecutionOperator.modelEagerExecution(inputs, outputs, operatorContext);
             }
-            Record first = (Record) recordRDD.first();
+            Record first = (Record) sample.get(0);
 
-            // Centralized Schema Derivation
             List<SqlTypeUtils.SchemaField> schemaFields = SqlTypeUtils.getSchema(first,
                     SqlTypeUtils.detectProduct(this.getProperties().getProperty("url")),
                     this.getColumnNames());
 
-            // Map Record to Row
             JavaRDD<Row> rowRDD = recordRDD.map(rec -> RowFactory.create(((Record) rec).getValues()));
 
-            // Build Spark Schema
             StructField[] fields = new StructField[schemaFields.size()];
             for (int i = 0; i < schemaFields.size(); i++) {
                 SqlTypeUtils.SchemaField sf = schemaFields.get(i);
@@ -104,26 +102,41 @@ public class SparkTableSink<T> extends TableSink<T> implements SparkExecutionOpe
                 fields[i] = new StructField(sf.getName(), sparkType, true, Metadata.empty());
             }
 
-            // Update column names in the operator if they were generated
-            String[] newColNames = schemaFields.stream().map(SqlTypeUtils.SchemaField::getName).toArray(String[]::new);
-            this.setColumnNames(newColNames);
+            // We skip updating column names in the operator to avoid mutating shared state.
+            // Inferred names are used locally for df creation.
 
             df = sqlContext.createDataFrame(rowRDD, new StructType(fields));
         } else {
-            // POJO Case: Let Spark handle it natively
             df = sqlContext.createDataFrame(recordRDD, typeClass);
-            // If columnNames are provided, we should probably select/rename them,
-            // but usually createDataFrame(rdd, beanClass) maps fields to columns.
-            if (this.getColumnNames() != null && this.getColumnNames().length > 0) {
-                // Optionally filter or reorder columns to match this.getColumnNames()
-                // For now, Spark's native mapping is preferred.
+            // For POJOs, we currently do not support custom columnNames to avoid
+            // ambiguous or misleading mappings. Fail fast if they are provided.
+            String[] columnNames = this.getColumnNames();
+            if (columnNames != null && columnNames.length > 0) {
+                throw new WayangException(
+                        "columnNames are not supported for POJO inputs in SparkTableSink. " +
+                                "Either omit columnNames or use Record inputs if you need custom column mapping.");
             }
         }
 
-        this.getProperties().setProperty("batchSize", "250000");
+        Properties writeProps = new Properties();
+        writeProps.putAll(this.getProperties());
+        if (!writeProps.containsKey("batchSize")) {
+            writeProps.setProperty("batchSize", "250000");
+        }
+
+        String targetTable = this.getTableName();
+        if (targetTable != null && !targetTable.startsWith("(") && !targetTable.startsWith("\"")
+                && !targetTable.startsWith("`")) {
+            DatabaseProduct product = SqlTypeUtils.detectProduct(this.getProperties().getProperty("url"));
+            String quote = (product == DatabaseProduct.MYSQL) ? "`"
+                    : (product == DatabaseProduct.MSSQL) ? "[" : "\"";
+            String closingQuote = (product == DatabaseProduct.MSSQL) ? "]" : quote;
+            targetTable = quote + targetTable + closingQuote;
+        }
+
         df.write()
                 .mode(this.mode)
-                .jdbc(this.getProperties().getProperty("url"), this.getTableName(), this.getProperties());
+                .jdbc(this.getProperties().getProperty("url"), targetTable, writeProps);
 
         return ExecutionOperator.modelEagerExecution(inputs, outputs, operatorContext);
     }

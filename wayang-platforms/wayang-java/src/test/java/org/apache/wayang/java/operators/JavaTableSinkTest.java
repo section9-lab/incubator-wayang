@@ -101,7 +101,7 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { inputChannelInstance }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + TABLE_NAME)) {
+                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM \"" + TABLE_NAME + "\"")) {
             rs.next();
             assertEquals(2, rs.getInt(1));
         }
@@ -117,7 +117,7 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         dbProps.setProperty("driver", DRIVER);
 
         JavaTableSink<TestPojo> sink = new JavaTableSink<>(dbProps, "overwrite", TABLE_NAME,
-                null, // schema detected via reflection
+                null,
                 DataSetType.createDefault(TestPojo.class));
 
         Job job = mock(Job.class);
@@ -136,7 +136,7 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { inputChannelInstance }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT * FROM " + TABLE_NAME + " ORDER BY \"id\"")) {
+                ResultSet rs = stmt.executeQuery("SELECT * FROM \"" + TABLE_NAME + "\" ORDER BY \"id\"")) {
             rs.next();
             assertEquals(1, rs.getInt("id"));
             assertEquals("Alice", rs.getString("name"));
@@ -155,7 +155,7 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         dbProps.setProperty("password", "");
         dbProps.setProperty("driver", DRIVER);
 
-        // 1. Initial write (overwrite)
+        // 1. Initial write
         JavaTableSink<Record> sink1 = new JavaTableSink<>(dbProps, "overwrite", TABLE_NAME,
                 new String[] { "id", "name" },
                 DataSetType.createDefault(Record.class));
@@ -186,7 +186,7 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         evaluate(sink2, new ChannelInstance[] { input2 }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + TABLE_NAME)) {
+                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM \"" + TABLE_NAME + "\"")) {
             rs.next();
             assertEquals(2, rs.getInt(1));
         }
@@ -201,13 +201,13 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         dbProps.setProperty("password", "");
         dbProps.setProperty("driver", DRIVER);
 
-        // 1. Create table with old schema (id, name)
+        // 1. Create table with old schema
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE TABLE " + TABLE_NAME + " (id INT, name VARCHAR(255))");
             stmt.execute("INSERT INTO " + TABLE_NAME + " VALUES (1, 'Old')");
         }
 
-        // 2. Overwrite with new schema (id, age, city)
+        // 2. Overwrite with new schema
         JavaTableSink<Record> sink = new JavaTableSink<>(dbProps, "overwrite", TABLE_NAME,
                 new String[] { "id", "age", "city" },
                 DataSetType.createDefault(Record.class));
@@ -223,7 +223,7 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { input }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT * FROM " + TABLE_NAME)) {
+                ResultSet rs = stmt.executeQuery("SELECT * FROM \"" + TABLE_NAME + "\"")) {
             rs.next();
             assertEquals(2, rs.getInt("id"));
             assertEquals(30, rs.getInt("age"));
@@ -265,7 +265,7 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { input }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT \"name\" FROM " + TABLE_NAME + " WHERE \"id\" = 1")) {
+                ResultSet rs = stmt.executeQuery("SELECT \"name\" FROM \"" + TABLE_NAME + "\" WHERE \"id\" = 1")) {
             rs.next();
             assertEquals(null, rs.getString(1));
             assertTrue(rs.wasNull());
@@ -297,7 +297,7 @@ class JavaTableSinkTest extends JavaExecutionOperatorTestBase {
         evaluate(sink, new ChannelInstance[] { input }, new ChannelInstance[0]);
 
         try (Statement stmt = connection.createStatement();
-                ResultSet rs = stmt.executeQuery("SELECT * FROM " + TABLE_NAME + " WHERE \"id\" = 1")) {
+                ResultSet rs = stmt.executeQuery("SELECT * FROM \"" + TABLE_NAME + "\" WHERE \"id\" = 1")) {
             rs.next();
             assertTrue(rs.getBoolean("is_active"));
             assertEquals(5000.50, rs.getDouble("salary"), 0.001);
