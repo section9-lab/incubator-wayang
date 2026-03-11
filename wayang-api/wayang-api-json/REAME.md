@@ -8,7 +8,7 @@
 ./mvnw clean package -pl :wayang-assembly -Pdistribution
 ```
 
-### 2. Starting the REST API as a Background Process
+### 2. Starting the REST API
 
 ```bash
 cd wayang-assembly/target/
