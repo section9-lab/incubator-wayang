@@ -20,7 +20,7 @@ package org.apache.wayang.apps.wordcount;
 
 import org.apache.wayang.api.JavaPlanBuilder;
 import org.apache.wayang.basic.data.Tuple2;
-import org.apache.wayang.basic.operators.ParquetSource;
+import org.apache.wayang.core.api.Configuration;
 import org.apache.wayang.core.api.WayangContext;
 import org.apache.wayang.java.Java;
 import org.apache.wayang.spark.Spark;
@@ -37,7 +37,7 @@ public class WordCountParquet {
             System.exit(1);
         }
 
-        WayangContext wayangContext = new WayangContext();
+        WayangContext wayangContext = new WayangContext(new Configuration());
         for (String platform : args[0].split(",")) {
             switch (platform) {
                 case "java":
