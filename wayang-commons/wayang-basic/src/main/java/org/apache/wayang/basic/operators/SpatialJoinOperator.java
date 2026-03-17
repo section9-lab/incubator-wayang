@@ -27,6 +27,9 @@ import org.apache.wayang.core.optimizer.cardinality.CardinalityEstimate;
 import org.apache.wayang.core.plan.wayangplan.BinaryToUnaryOperator;
 import org.apache.wayang.core.types.DataSetType;
 
+/**
+ * This operator returns a new dataset after joining the input tables using the predicate.
+ */
 public class SpatialJoinOperator<InputType0, InputType1> extends BinaryToUnaryOperator<InputType0, InputType1, Tuple2<InputType0, InputType1>> {
 
     private static <InputType0, InputType1> DataSetType<Tuple2<InputType0, InputType1>> createOutputDataSetType() {
