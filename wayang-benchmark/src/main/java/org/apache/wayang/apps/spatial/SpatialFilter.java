@@ -19,6 +19,8 @@
 package org.apache.wayang.apps.spatial;
 
 import org.apache.wayang.api.JavaPlanBuilder;
+import org.apache.wayang.core.api.spatial.SpatialGeometry;
+import org.apache.wayang.spark.Spark;
 import org.apache.wayang.spatial.data.WayangGeometry;
 import org.apache.wayang.core.api.Configuration;
 import org.apache.wayang.core.api.WayangContext;
@@ -31,26 +33,24 @@ import java.util.Collection;
 
 public class SpatialFilter {
     public static void main(String[] args) {
-        System.out.println(Arrays.toString((args)));
+        System.out.println("Running Spatial Filter Benchmark with args " + Arrays.toString(args));
 
-        if (args.length <= 3) {
-            System.err.print("Usage:");
-        }
+        String fileUrl = args[1];
+        String platform = args[2];
+        String selectivity = args[3];
 
         WayangContext wayangContext = new WayangContext(new Configuration())
                 .withPlugin(Java.basicPlugin())
-                .withPlugin(Spatial.javaPlugin());
+                .withPlugin(Spark.basicPlugin())
+                .withPlugin(Spatial.plugin());
 
         JavaPlanBuilder planBuilder = new JavaPlanBuilder(wayangContext)
                 .withJobName("filter test")
                 .withUdfJarOf(SpatialFilter.class);
 
-        WayangGeometry queryGeometry = WayangGeometry.fromStringInput(
-                "POLYGON((12.777099609375 52.219050335542484, 13.991088867187502 52.219050335542484, 13.991088867187502 52.71766191466581, 12.777099609375 52.71766191466581, 12.777099609375 52.219050335542484))"
+        SpatialGeometry queryGeometry = WayangGeometry.fromStringInput(
+                "POLYGON((0.0 0.0, " + selectivity + " 0.0, " + selectivity + " " + selectivity + ", 0.0 " + selectivity + ", 0.0 0.0))"
         );
-
-        String fileUrl = args[1];
-        String platform = args[2];
 
         Collection<Long> outputcount =
                 planBuilder.readTextFile(fileUrl)
@@ -58,11 +58,16 @@ public class SpatialFilter {
                                 (input -> WayangGeometry.fromStringInput((input.split("\",")[0]).replace("\"", ""))),
                                 SpatialPredicate.INTERSECTS,
                                 queryGeometry
-                        ).withTargetPlatform(Java.platform())
+                        ).withTargetPlatform(
+                                switch (platform) {
+                                    case "java"  -> Java.platform();
+                                    case "spark" -> Spark.platform();
+                                    default -> Java.platform();
+                                }
+                        )
                         .count()
                         .collect();
 
-        System.out.println("Spatial Filter (INTERSECTS: " + outputcount);
-
+        System.out.println("Spatial Filter Result Size: " + outputcount);
     }
 }
