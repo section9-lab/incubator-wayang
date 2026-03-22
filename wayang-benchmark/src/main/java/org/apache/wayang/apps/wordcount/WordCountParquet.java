@@ -37,7 +37,7 @@ public class WordCountParquet {
             System.exit(1);
         }
 
-        WayangContext wayangContext = new WayangContext(new Configuration());
+        WayangContext wayangContext = new WayangContext();
         for (String platform : args[0].split(",")) {
             switch (platform) {
                 case "java":
@@ -90,4 +90,3 @@ public class WordCountParquet {
         wordcounts.forEach(wc -> System.out.printf("%dx %s\n", wc.field1, wc.field0));
     }
 }
-

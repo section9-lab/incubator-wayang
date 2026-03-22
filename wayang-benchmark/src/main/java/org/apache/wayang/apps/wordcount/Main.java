@@ -39,7 +39,7 @@ public class Main {
                 System.exit(1);
             }
 
-            WayangContext wayangContext = new WayangContext(new Configuration());
+            WayangContext wayangContext = new WayangContext();
             for (String platform : args[0].split(",")) {
                 switch (platform) {
                     case "java":
