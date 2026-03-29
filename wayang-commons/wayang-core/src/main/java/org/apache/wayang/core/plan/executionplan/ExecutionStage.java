@@ -314,7 +314,7 @@ public class ExecutionStage {
     }
 
     /**
-     * Converts this instance into a map that can be serialized into a JSON.
+     * Converts this instance into a map that can be serialized to JSON.
      *
      * @return a map representing this instance
      */
