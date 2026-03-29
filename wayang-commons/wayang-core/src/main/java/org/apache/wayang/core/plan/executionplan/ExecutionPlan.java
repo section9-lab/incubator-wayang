@@ -97,7 +97,9 @@ public class ExecutionPlan {
 
     /**
      * Converts this execution plan into a list of maps, where each map represents an {@link ExecutionStage}.
-     * The stages are included in an order that respects their dependencies.
+     * The stages are included in an order that, where possible, respects their dependencies (i.e., is
+     * dependency-respecting/topological), but loop-head stages may be scheduled early to break cycles,
+     * which can cause them to appear before all of their predecessors.
      *
      * @return a list of maps representing the execution stages
      */
