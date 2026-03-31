@@ -22,6 +22,8 @@ import org.apache.wayang.basic.channels.FileChannel;
 import org.apache.wayang.basic.data.Tuple2;
 import org.apache.wayang.basic.operators.SpatialFilterOperator;
 import org.apache.wayang.basic.operators.SpatialJoinOperator;
+import org.apache.wayang.basic.operators.FilterOperator;
+import org.apache.wayang.basic.operators.JoinOperator;
 import org.apache.wayang.basic.operators.TableSource;
 import org.apache.wayang.core.api.Job;
 import org.apache.wayang.core.api.exception.WayangException;
@@ -181,12 +183,12 @@ public class JdbcExecutor extends ExecutorTemplate {
         while (nextTask != null) {
             // Evaluate the nextTask.
             final var operator = nextTask.getOperator();
-            if (operator instanceof JdbcFilterOperator || operator instanceof SpatialFilterOperator) {
+            if (operator instanceof FilterOperator || operator instanceof SpatialFilterOperator) {
                 filterTasks.add((JdbcExecutionOperator) operator);
             } else if (operator instanceof JdbcProjectionOperator) {
                 assert projectionTask == null; // Allow one projection operator per stage for now.
                 projectionTask = (JdbcProjectionOperator) operator;
-            } else if (operator instanceof JdbcJoinOperator || (operator instanceof SpatialJoinOperator)) {
+            } else if (operator instanceof JoinOperator || (operator instanceof SpatialJoinOperator)) {
                 joinTasks.add((JdbcExecutionOperator) operator);
             } else {
                 throw new WayangException(String.format("Unsupported JDBC execution task %s", nextTask.toString()));
