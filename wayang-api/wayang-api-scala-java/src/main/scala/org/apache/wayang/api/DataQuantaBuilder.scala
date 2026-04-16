@@ -540,6 +540,36 @@ trait DataQuantaBuilder[+This <: DataQuantaBuilder[_, Out], Out] extends Logging
   }
 
   /**
+    * Feed the built [[DataQuanta]] into a [[org.apache.wayang.basic.operators.ParquetSink]]. This triggers
+    * execution of the constructed [[WayangPlan]].
+    *
+    * @param url            URL of the Parquet file to be written
+    * @param overwrite      whether to overwrite existing files
+    * @param preferDataset  whether to prefer Spark Dataset over RDD
+    */
+  def writeParquet(url: String,
+                   overwrite: Boolean,
+                   preferDataset: Boolean): Unit =
+    this.writeParquet(url, overwrite, preferDataset, null)
+
+  /**
+    * Feed the built [[DataQuanta]] into a [[org.apache.wayang.basic.operators.ParquetSink]]. This triggers
+    * execution of the constructed [[WayangPlan]].
+    *
+    * @param url            URL of the Parquet file to be written
+    * @param overwrite      whether to overwrite existing files
+    * @param preferDataset  whether to prefer Spark Dataset over RDD
+    * @param jobName        optional name for the [[WayangPlan]]
+    */
+  def writeParquet(url: String,
+                   overwrite: Boolean,
+                   preferDataset: Boolean,
+                   jobName: String): Unit = {
+    if (jobName != null) this.javaPlanBuilder.withJobName(jobName)
+    this.dataQuanta().asInstanceOf[DataQuanta[Record]].writeParquet(url, overwrite, preferDataset)
+  }
+
+  /**
     * Enriches the set of operations to [[Record]]-based ones. This instances must deal with data quanta of
     * type [[Record]], though. Because of Java's type erasure, we need to leave it up to you whether this
     * operation is applicable.
