@@ -223,11 +223,7 @@ public class JdbcExecutor extends ExecutorTemplate {
         }
         if (!conditions.isEmpty()) {
             sb.append(" WHERE ");
-            String separator = "";
-            for (final String condition : conditions) {
-                sb.append(separator).append(condition);
-                separator = " AND ";
-            }
+            sb.append(String.join(" AND ", conditions));
         }
         sb.append(';');
         return sb;
