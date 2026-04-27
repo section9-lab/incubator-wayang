@@ -570,6 +570,40 @@ trait DataQuantaBuilder[+This <: DataQuantaBuilder[_, Out], Out] extends Logging
   }
 
   /**
+    * Feed the built [[DataQuanta]] into a [[org.apache.wayang.basic.operators.TableSink]]. This triggers
+    * execution of the constructed [[WayangPlan]].
+    *
+    * @param tableName   name of the target table
+    * @param mode        write mode (e.g., "overwrite" or "append")
+    * @param columnNames names of the columns in the target table
+    * @param props       database connection properties
+    */
+  def writeTable(tableName: String,
+                 mode: String,
+                 columnNames: Array[String],
+                 props: java.util.Properties): Unit =
+    this.writeTable(tableName, mode, columnNames, props, null)
+
+  /**
+    * Feed the built [[DataQuanta]] into a [[org.apache.wayang.basic.operators.TableSink]]. This triggers
+    * execution of the constructed [[WayangPlan]].
+    *
+    * @param tableName   name of the target table
+    * @param mode        write mode (e.g., "overwrite" or "append")
+    * @param columnNames names of the columns in the target table
+    * @param props       database connection properties
+    * @param jobName     optional name for the [[WayangPlan]]
+    */
+  def writeTable(tableName: String,
+                 mode: String,
+                 columnNames: Array[String],
+                 props: java.util.Properties,
+                 jobName: String): Unit = {
+    if (jobName != null) this.javaPlanBuilder.withJobName(jobName)
+    this.dataQuanta().writeTable(tableName, mode, columnNames, props)
+  }
+
+  /**
     * Enriches the set of operations to [[Record]]-based ones. This instances must deal with data quanta of
     * type [[Record]], though. Because of Java's type erasure, we need to leave it up to you whether this
     * operation is applicable.

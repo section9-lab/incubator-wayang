@@ -65,7 +65,8 @@ public class Mappings {
             new AzureBlobStorageSourceMapping(),
             new ApacheIcebergSourceMapping(),
             new ApacheIcebergSinkMapping(),
-            new ParquetSinkMapping()
+            new ParquetSinkMapping(),
+            new TableSinkMapping()
     );
 
     public static Collection<Mapping> GRAPH_MAPPINGS = Arrays.asList(
