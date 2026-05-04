@@ -20,6 +20,10 @@ package org.apache.wayang.jdbc.execution;
 
 import org.apache.wayang.basic.channels.FileChannel;
 import org.apache.wayang.basic.data.Tuple2;
+import org.apache.wayang.basic.operators.SpatialFilterOperator;
+import org.apache.wayang.basic.operators.SpatialJoinOperator;
+import org.apache.wayang.basic.operators.FilterOperator;
+import org.apache.wayang.basic.operators.JoinOperator;
 import org.apache.wayang.basic.operators.TableSource;
 import org.apache.wayang.core.api.Job;
 import org.apache.wayang.core.api.exception.WayangException;
@@ -170,21 +174,22 @@ public class JdbcExecutor extends ExecutorTemplate {
         // Extract the different types of ExecutionOperators from the stage.
         final JdbcTableSource tableOp = (JdbcTableSource) startTask.getOperator();
         SqlQueryChannel.Instance tipChannelInstance = JdbcExecutor.instantiateOutboundChannel(startTask, context, jdbcExecutor);
-        final Collection<JdbcFilterOperator> filterTasks = new ArrayList<>(4);
+        final Collection<JdbcExecutionOperator> filterTasks = new ArrayList<>(4);
         JdbcProjectionOperator projectionTask = null;
-        final Collection<JdbcJoinOperator<?>> joinTasks = new ArrayList<>();
+        final Collection<JdbcExecutionOperator> joinTasks = new ArrayList<>();
         final Set<ExecutionTask> allTasks = stage.getAllTasks();
         assert allTasks.size() <= 3;
         ExecutionTask nextTask = JdbcExecutor.findJdbcExecutionOperatorTaskInStage(startTask, stage);
         while (nextTask != null) {
             // Evaluate the nextTask.
-            if (nextTask.getOperator() instanceof final JdbcFilterOperator filterOperator) {
-                filterTasks.add(filterOperator);
-            } else if (nextTask.getOperator() instanceof JdbcProjectionOperator projectionOperator) {
+            final var operator = nextTask.getOperator();
+            if (operator instanceof FilterOperator || operator instanceof SpatialFilterOperator) {
+                filterTasks.add((JdbcExecutionOperator) operator);
+            } else if (operator instanceof JdbcProjectionOperator) {
                 assert projectionTask == null; // Allow one projection operator per stage for now.
-                projectionTask = projectionOperator;
-            } else if (nextTask.getOperator() instanceof JdbcJoinOperator joinOperator) {
-                joinTasks.add(joinOperator);
+                projectionTask = (JdbcProjectionOperator) operator;
+            } else if (operator instanceof JoinOperator || (operator instanceof SpatialJoinOperator)) {
+                joinTasks.add((JdbcExecutionOperator) operator);
             } else {
                 throw new WayangException(String.format("Unsupported JDBC execution task %s", nextTask.toString()));
             }
@@ -202,8 +207,9 @@ public class JdbcExecutor extends ExecutorTemplate {
     }
 
     public static StringBuilder createSqlString(final JdbcExecutor jdbcExecutor, final JdbcTableSource tableOp,
-            final Collection<JdbcFilterOperator> filterTasks, JdbcProjectionOperator projectionTask,
-            final Collection<JdbcJoinOperator<?>> joinTasks) {
+            final Collection<JdbcExecutionOperator> filterTasks,
+            JdbcProjectionOperator projectionTask,
+            final Collection<JdbcExecutionOperator> joinTasks) {
         final String tableName = tableOp.createSqlClause(jdbcExecutor.connection, jdbcExecutor.functionCompiler);
         final Collection<String> conditions = filterTasks.stream()
                 .map(op -> op.createSqlClause(jdbcExecutor.connection, jdbcExecutor.functionCompiler))
