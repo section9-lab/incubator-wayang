@@ -1188,7 +1188,26 @@ class DataQuanta[Out: ClassTag](val operator: ElementaryOperator, outputIndex: I
       this.planBuilder.sinks.clear()
     }
 
-
+    /**
+    * Write the data quanta in this instance to a database table. Triggers execution.
+    *
+    * @param tableName   name of the target table
+    * @param mode        write mode (e.g., "overwrite" or "append")
+    * @param columnNames names of the columns in the target table
+    * @param props       database connection properties
+    */
+  def writeTable(tableName: String,
+                 mode: String,
+                 columnNames: Array[String],
+                 props: java.util.Properties): Unit = {
+    val sink = new TableSink[Out](props, mode, tableName, columnNames: _*)
+    sink.setName(s"Write to table $tableName")
+    this.connectTo(sink, 0)
+    this.planBuilder.sinks += sink
+    this.planBuilder.buildAndExecute()
+    this.planBuilder.sinks.clear()
+  }
+  
   /**
     * Write the data quanta in this instance to a text file. Triggers execution.
     *
