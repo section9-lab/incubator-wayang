@@ -50,8 +50,7 @@ import java.util.stream.StreamSupport;
 /**
  * Converts {@link SqlQueryChannel}s into {@link StreamChannel}s.
  */
-public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Record>
-        implements JavaExecutionOperator, JsonSerializable {
+public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Record> implements JavaExecutionOperator, JsonSerializable {
 
     private final GenericJdbcPlatform jdbcPlatform;
 
@@ -82,7 +81,6 @@ public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Rec
         GenericJdbcPlatform producerPlatform =
                 (GenericJdbcPlatform) input.getChannel().getProducer().getPlatform();
 
-        // Fix: safely resolve JDBC name
         String jdbcName = input.getJdbcName();
         if (jdbcName == null || jdbcName.trim().isEmpty()) {
             jdbcName = producerPlatform.getPlatformId();
@@ -111,13 +109,10 @@ public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Rec
         queryLineageNode.addPredecessor(input.getLineage());
 
         ExecutionLineageNode outputLineageNode = new ExecutionLineageNode(operatorContext);
-        outputLineageNode.add(
-                LoadProfileEstimators.createFromSpecification(
-                        String.format("wayang.%s.sqltostream.load.output",
-                                this.jdbcPlatform.getPlatformId()),
+        outputLineageNode.add(LoadProfileEstimators.createFromSpecification(
+                String.format("wayang.%s.sqltostream.load.output", this.jdbcPlatform.getPlatformId()),
                         executor.getConfiguration()
-                )
-        );
+                ));
         output.getLineage().addPredecessor(outputLineageNode);
 
         return queryLineageNode.collectAndMark();
@@ -125,8 +120,7 @@ public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Rec
 
     @Override
     public List<ChannelDescriptor> getSupportedInputChannels(int index) {
-        return Collections.singletonList(
-                this.jdbcPlatform.getGenericSqlQueryChannelDescriptor());
+        return Collections.singletonList(this.jdbcPlatform.getGenericSqlQueryChannelDescriptor());
     }
 
     @Override
@@ -137,10 +131,8 @@ public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Rec
     @Override
     public Collection<String> getLoadProfileEstimatorConfigurationKeys() {
         return Arrays.asList(
-                String.format("wayang.%s.sqltostream.load.query",
-                        this.jdbcPlatform.getPlatformId()),
-                String.format("wayang.%s.sqltostream.load.output",
-                        this.jdbcPlatform.getPlatformId())
+                String.format("wayang.%s.sqltostream.load.query", this.jdbcPlatform.getPlatformId()),
+                String.format("wayang.%s.sqltostream.load.output", this.jdbcPlatform.getPlatformId())
         );
     }
 
@@ -169,8 +161,7 @@ public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Rec
                     this.next = null;
                     this.close();
                 } else {
-                    final int recordWidth =
-                            this.resultSet.getMetaData().getColumnCount();
+                    final int recordWidth = this.resultSet.getMetaData().getColumnCount();
 
                     Object[] values = new Object[recordWidth];
 
@@ -183,8 +174,7 @@ public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Rec
             } catch (SQLException e) {
                 this.next = null;
                 this.close();
-                throw new WayangException(
-                        "Exception while iterating the result set.", e);
+                throw new WayangException("Exception while iterating the result set.", e);
             }
         }
 
@@ -206,8 +196,7 @@ public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Rec
                 try {
                     this.resultSet.close();
                 } catch (Throwable t) {
-                    LogManager.getLogger(this.getClass())
-                            .error("Could not close result set.", t);
+                    LogManager.getLogger(this.getClass()).error("Could not close result set.", t);
                 } finally {
                     this.resultSet = null;
                 }
@@ -217,15 +206,13 @@ public class GenericSqlToStreamOperator extends UnaryToUnaryOperator<Record, Rec
 
     @Override
     public WayangJsonObj toJson() {
-        return new WayangJsonObj()
-                .put("platform", this.jdbcPlatform.getClass().getCanonicalName());
+        return new WayangJsonObj().put("platform", this.jdbcPlatform.getClass().getCanonicalName());
     }
 
     @SuppressWarnings("unused")
     public static GenericSqlToStreamOperator fromJson(WayangJsonObj wayangJsonObj) {
         final String platformClassName = wayangJsonObj.getString("platform");
-        GenericJdbcPlatform jdbcPlatform =
-                ReflectionUtils.evaluate(platformClassName + ".getInstance()");
+        GenericJdbcPlatform jdbcPlatform = ReflectionUtils.evaluate(platformClassName + ".getInstance()");
         return new GenericSqlToStreamOperator(jdbcPlatform);
     }
 }

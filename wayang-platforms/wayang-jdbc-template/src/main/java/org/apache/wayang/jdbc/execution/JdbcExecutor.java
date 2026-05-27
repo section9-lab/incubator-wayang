@@ -63,12 +63,8 @@ public class JdbcExecutor extends ExecutorTemplate {
     }
 
     @Override
-    public void execute(final ExecutionStage stage,
-                        final OptimizationContext optimizationContext,
-                        final ExecutionState executionState) {
-
-        final Tuple2<String, SqlQueryChannel.Instance> pair =
-                JdbcExecutor.createSqlQuery(stage, optimizationContext, this);
+    public void execute(final ExecutionStage stage, final OptimizationContext optimizationContext, final ExecutionState executionState) {
+        final Tuple2<String, SqlQueryChannel.Instance> pair = JdbcExecutor.createSqlQuery(stage, optimizationContext, this);
 
         final String query = pair.field0;
         final SqlQueryChannel.Instance queryChannel = pair.field1;
@@ -80,9 +76,7 @@ public class JdbcExecutor extends ExecutorTemplate {
     /**
      * Safe version (removes WayangCollections.getSingle crash)
      */
-    private static ExecutionTask findJdbcExecutionOperatorTaskInStage(
-            final ExecutionTask task,
-            final ExecutionStage stage) {
+    private static ExecutionTask findJdbcExecutionOperatorTaskInStage(final ExecutionTask task, final ExecutionStage stage) {
 
         assert task.getNumOuputChannels() == 1;
 
@@ -94,34 +88,26 @@ public class JdbcExecutor extends ExecutorTemplate {
 
         final ExecutionTask consumer = outputChannel.getConsumers().iterator().next();
 
-        return consumer.getStage() == stage &&
-                consumer.getOperator() instanceof JdbcExecutionOperator
-                ? consumer
-                : null;
+        return consumer.getStage() == stage && consumer.getOperator() instanceof JdbcExecutionOperator ? consumer
+                        : null;
     }
 
-    private static SqlQueryChannel.Instance instantiateOutboundChannel(
-            final ExecutionTask task,
-            final OptimizationContext optimizationContext,
-            final JdbcExecutor jdbcExecutor) {
-
+    private static SqlQueryChannel.Instance instantiateOutboundChannel(final ExecutionTask task,
+            final OptimizationContext optimizationContext, final JdbcExecutor jdbcExecutor) {
         assert task.getNumOuputChannels() == 1;
         assert task.getOutputChannel(0) instanceof SqlQueryChannel;
 
         final SqlQueryChannel outputChannel = (SqlQueryChannel) task.getOutputChannel(0);
 
-        final OptimizationContext.OperatorContext operatorContext =
-                optimizationContext.getOperatorContext(task.getOperator());
+        final OptimizationContext.OperatorContext operatorContext = optimizationContext
+                .getOperatorContext(task.getOperator());
 
         return outputChannel.createInstance(jdbcExecutor, operatorContext, 0);
     }
 
-    private static SqlQueryChannel.Instance instantiateOutboundChannel(
-            final ExecutionTask task,
+    private static SqlQueryChannel.Instance instantiateOutboundChannel(final ExecutionTask task,
             final OptimizationContext optimizationContext,
-            final SqlQueryChannel.Instance predecessorChannelInstance,
-            final JdbcExecutor jdbcExecutor) {
-
+            final SqlQueryChannel.Instance predecessorChannelInstance,final JdbcExecutor jdbcExecutor) {
         final SqlQueryChannel.Instance newInstance =
                 instantiateOutboundChannel(task, optimizationContext, jdbcExecutor);
 
@@ -133,10 +119,8 @@ public class JdbcExecutor extends ExecutorTemplate {
     /**
      * Main SQL builder
      */
-    protected static Tuple2<String, SqlQueryChannel.Instance> createSqlQuery(
-            final ExecutionStage stage,
-            final OptimizationContext context,
-            final JdbcExecutor jdbcExecutor) {
+    protected static Tuple2<String, SqlQueryChannel.Instance> createSqlQuery(final ExecutionStage stage,
+            final OptimizationContext context, final JdbcExecutor jdbcExecutor) {
 
         final Collection<?> startTasks = stage.getStartTasks();
         final Collection<?> termTasks = stage.getTerminalTasks();
@@ -152,14 +136,10 @@ public class JdbcExecutor extends ExecutorTemplate {
         }
 
         final JdbcTableSource tableOp = (JdbcTableSource) startTask.getOperator();
-
-        SqlQueryChannel.Instance tipChannelInstance =
-                instantiateOutboundChannel(startTask, context, jdbcExecutor);
-
+        SqlQueryChannel.Instance tipChannelInstance = instantiateOutboundChannel(startTask, context, jdbcExecutor);
         final Collection<JdbcFilterOperator> filterTasks = new ArrayList<>(4);
         JdbcProjectionOperator projectionTask = null;
         final Collection<JdbcJoinOperator<?>> joinTasks = new ArrayList<>();
-
         final Set<ExecutionTask> allTasks = stage.getAllTasks();
 
         ExecutionTask nextTask =
@@ -184,45 +164,27 @@ public class JdbcExecutor extends ExecutorTemplate {
                     findJdbcExecutionOperatorTaskInStage(nextTask, stage);
         }
 
-        final StringBuilder query =
-                createSqlString(jdbcExecutor, tableOp, filterTasks, projectionTask, joinTasks);
-
+        final StringBuilder query = createSqlString(jdbcExecutor, tableOp, filterTasks, projectionTask, joinTasks);
         return new Tuple2<>(query.toString(), tipChannelInstance);
     }
 
-    public static StringBuilder createSqlString(
-            final JdbcExecutor jdbcExecutor,
-            final JdbcTableSource tableOp,
-            final Collection<JdbcFilterOperator> filterTasks,
-            JdbcProjectionOperator projectionTask,
+    public static StringBuilder createSqlString(final JdbcExecutor jdbcExecutor, final JdbcTableSource tableOp,
+            final Collection<JdbcFilterOperator> filterTasks, JdbcProjectionOperator projectionTask,
             final Collection<JdbcJoinOperator<?>> joinTasks) {
-
-        final String tableName =
-                tableOp.createSqlClause(jdbcExecutor.connection, jdbcExecutor.functionCompiler);
-
-        final Collection<String> conditions =
-                filterTasks.stream()
+        final String tableName = tableOp.createSqlClause(jdbcExecutor.connection, jdbcExecutor.functionCompiler);
+        final Collection<String> conditions = filterTasks.stream()
                         .map(op -> op.createSqlClause(jdbcExecutor.connection, jdbcExecutor.functionCompiler))
                         .collect(Collectors.toList());
-
-        final String projection =
-                projectionTask == null
-                        ? "*"
-                        : projectionTask.createSqlClause(jdbcExecutor.connection, jdbcExecutor.functionCompiler);
-
-        final Collection<String> joins =
-                joinTasks.stream()
+        final String projection = projectionTask == null ? "*" : projectionTask.createSqlClause(jdbcExecutor.connection, jdbcExecutor.functionCompiler);
+        final Collection<String> joins = joinTasks.stream()
                         .map(op -> op.createSqlClause(jdbcExecutor.connection, jdbcExecutor.functionCompiler))
                         .collect(Collectors.toList());
 
         final StringBuilder sb = new StringBuilder(1000);
-
         sb.append("SELECT ").append(projection).append(" FROM ").append(tableName);
-
         for (final String join : joins) {
             sb.append(" ").append(join);
         }
-
         if (!conditions.isEmpty()) {
             sb.append(" WHERE ");
             String separator = "";
@@ -231,9 +193,7 @@ public class JdbcExecutor extends ExecutorTemplate {
                 separator = " AND ";
             }
         }
-
         sb.append(';');
-
         return sb;
     }
 
@@ -251,28 +211,20 @@ public class JdbcExecutor extends ExecutorTemplate {
         return this.platform;
     }
 
-    private void saveResult(final FileChannel.Instance outputFileChannelInstance,
-                            final ResultSet rs)
+    private void saveResult(final FileChannel.Instance outputFileChannelInstance, final ResultSet rs)
             throws IOException, SQLException {
 
-        final FileSystem outFs =
-                FileSystems.getFileSystem(outputFileChannelInstance.getSinglePath()).get();
-
-        try (final OutputStreamWriter writer =
-                     new OutputStreamWriter(outFs.create(outputFileChannelInstance.getSinglePath()))) {
-
+        final FileSystem outFs = FileSystems.getFileSystem(outputFileChannelInstance.getSinglePath()).get();
+        try (final OutputStreamWriter writer =new OutputStreamWriter(
+                outFs.create(outputFileChannelInstance.getSinglePath()))) {
             while (rs.next()) {
-
                 final ResultSetMetaData rsmd = rs.getMetaData();
-
                 for (int i = 1; i <= rsmd.getColumnCount(); i++) {
                     writer.write(rs.getString(i));
                     if (i < rsmd.getColumnCount()) writer.write('\t');
                 }
-
                 if (!rs.isLast()) writer.write('\n');
             }
-
         } catch (final UncheckedIOException e) {
             throw e.getCause();
         }

@@ -43,7 +43,6 @@ import org.apache.wayang.genericjdbc.operators.GenericJdbcTableSource;
 import org.apache.wayang.genericjdbc.platform.GenericJdbcPlatform;
 import org.apache.wayang.jdbc.compiler.FunctionCompiler;
 
-
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
@@ -140,19 +139,19 @@ public class GenericJdbcExecutor extends ExecutorTemplate {
      * @return the said follow-up {@link ExecutionTask} or {@code null} if none
      */
     private ExecutionTask findGenericJdbcExecutionOperatorTaskInStage(ExecutionTask task, ExecutionStage stage) {
-    assert task.getNumOuputChannels() == 1;
-    final Channel outputChannel = task.getOutputChannel(0);
+        assert task.getNumOuputChannels() == 1;
+        final Channel outputChannel = task.getOutputChannel(0);
 
-    if (outputChannel.getConsumers().isEmpty()) {
-        return null;
+        if (outputChannel.getConsumers().isEmpty()) {
+            return null;
+        }
+
+        final ExecutionTask consumer = WayangCollections.getSingle(outputChannel.getConsumers());
+
+        return consumer.getStage() == stage && consumer.getOperator() instanceof GenericJdbcExecutionOperator ?   
+                consumer :
+                null;
     }
-
-    final ExecutionTask consumer = WayangCollections.getSingle(outputChannel.getConsumers());
-
-    return consumer.getStage() == stage && consumer.getOperator() instanceof GenericJdbcExecutionOperator
-            ? consumer
-            : null;
-}
 
     /**
      * Instantiates the outbound {@link SqlQueryChannel} of an {@link ExecutionTask}.
