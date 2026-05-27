@@ -29,15 +29,15 @@ import org.apache.wayang.core.optimizer.costs.LoadProfileEstimators;
 import org.apache.wayang.core.types.DataSetType;
 import org.apache.wayang.jdbc.compiler.FunctionCompiler;
 
-public abstract class JdbcGlobalReduceOperator<Type> extends GlobalReduceOperator<Type>
+public abstract class JdbcGlobalReduceOperator extends GlobalReduceOperator<Record>
         implements JdbcExecutionOperator {
 
-    public JdbcGlobalReduceOperator(final GlobalReduceOperator<Type> globalReduceOperator) {
+    public JdbcGlobalReduceOperator(final GlobalReduceOperator<Record> globalReduceOperator) {
         super(globalReduceOperator);
     }
 
-    public JdbcGlobalReduceOperator(final DataSetType<Type> type, final ReduceDescriptor<Type> reduceDescriptor) {
-        super(reduceDescriptor, type);
+    public JdbcGlobalReduceOperator(final ReduceDescriptor<Record> reduceDescriptor) {
+        super(reduceDescriptor, DataSetType.createDefault(Record.class));
     }
 
     @Override

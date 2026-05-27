@@ -82,8 +82,9 @@ public class ReduceDescriptor<Type> extends FunctionDescriptor {
      *
      * @return a function that can perform the reduce
      */
-    public void withSqlImplementation(final String sqlImplementation) {
+    public ReduceDescriptor<Type> withSqlImplementation(final String sqlImplementation) {
         this.sqlImplementation = sqlImplementation;
+        return this;
     }
 
     /**
