@@ -19,6 +19,7 @@
 package org.apache.wayang.basic.util;
 
 import org.apache.wayang.basic.data.Record;
+import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -42,10 +43,13 @@ public class SqlTypeUtils {
         defaultMap.put(int.class, "INT");
         defaultMap.put(Long.class, "BIGINT");
         defaultMap.put(long.class, "BIGINT");
+        defaultMap.put(Short.class, "SMALLINT");
+        defaultMap.put(short.class, "SMALLINT");
         defaultMap.put(Double.class, "DOUBLE");
         defaultMap.put(double.class, "DOUBLE");
         defaultMap.put(Float.class, "FLOAT");
         defaultMap.put(float.class, "FLOAT");
+        defaultMap.put(BigDecimal.class, "NUMERIC");
         defaultMap.put(Boolean.class, "BOOLEAN");
         defaultMap.put(boolean.class, "BOOLEAN");
         defaultMap.put(String.class, "VARCHAR(255)");
