@@ -16,27 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.wayang.jdbc.test;
+package org.apache.wayang.postgres.operators;
 
 import org.apache.wayang.basic.data.Record;
-import org.apache.wayang.jdbc.operators.JdbcJoinOperator;
-import org.apache.wayang.core.function.TransformationDescriptor;
+import org.apache.wayang.basic.operators.GlobalReduceOperator;
+import org.apache.wayang.core.function.ReduceDescriptor;
+import org.apache.wayang.jdbc.operators.JdbcGlobalReduceOperator;
 
-/**
- * Test implementation of {@link JdbcJoinOperator}.
- */
-public class HsqldbJoinOperator<KeyType> extends JdbcJoinOperator<KeyType> {
-
-    public HsqldbJoinOperator(
-        TransformationDescriptor<Record, KeyType> keyDescriptor0,
-        TransformationDescriptor<Record, KeyType> keyDescriptor1
-    ) {
-        super(keyDescriptor0,keyDescriptor1);
+public class PostgresGlobalReduceOperator extends JdbcGlobalReduceOperator implements PostgresExecutionOperator {
+    public PostgresGlobalReduceOperator(final ReduceDescriptor<Record> reduceDescriptor) {
+        super(reduceDescriptor);
+    }
+    
+    public PostgresGlobalReduceOperator(GlobalReduceOperator<Record> that) {
+        super(that);
     }
 
     @Override
-    public HsqldbPlatform getPlatform() {
-        return HsqldbPlatform.getInstance();
+    protected PostgresGlobalReduceOperator createCopy() {
+        return new PostgresGlobalReduceOperator(this);
     }
-
 }
