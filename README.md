@@ -32,7 +32,7 @@
 
 [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Apache%20Wayang%20enables%20cross%20platform%20data%20processing,%20star%20it%20via:%20&url=https://github.com/apache/wayang&via=apachewayang&hashtags=dataprocessing,bigdata,analytics,hybridcloud,developers) [![LinkedIn](https://img.shields.io/badge/LinkedIn-Follow-0A66C2?style=social&logo=linkedin)](https://www.linkedin.com/company/apachewayang)
 
-You write your pipeline against a single API, then decide how it runs. Point it at one engine and it runs there — or hand Wayang's cost-based optimizer the choice and let it pick the best platform for each step across your laptop, Apache Spark, Apache Flink, or a database, even splitting a single job across several. Either way, when your data outgrows one machine you don't rewrite anything — you just make another engine available.
+You write your pipeline against a single API, then decide how it runs. Point it at one engine and it runs there. Or hand Wayang's cost-based optimizer the choice and let it pick the best platform for each step across your laptop, Apache Spark, Apache Flink, or a database, even splitting a single job across several. Either way, when your data outgrows one machine you don't rewrite anything, you just make another engine available.
 
 <p align="center">
   <img src="guides/img/wayang-architecture.svg" alt="A single pipeline, written once, feeds the Wayang optimizer, which routes each step to the best available engine — Local, Spark, Flink, Postgres, and others." width="720" />
@@ -52,9 +52,9 @@ You write your pipeline against a single API, then decide how it runs. Point it 
 
 ## How it works
 
-Most data processing systems are designed around a single execution engine. That keeps things simple, but your pipeline ends up tied to that engine's API — so combining engines, or moving to another, typically means rewriting.
+Most data processing systems are designed around a single execution engine. That keeps things simple, but your pipeline ends up tied to that engine's API. So combining engines, or moving to another, typically means rewriting and gluing together which is costly and time-consuming.
 
-Wayang sits one level up. You write a pipeline against Wayang's API and register the engines you *have* — then it's your call. Want control? Register one engine and it runs there. Want it handled? Register several and let the cost-based optimizer pick the best one for each step, even splitting a single job across engines.
+Wayang sits one level up. You write a pipeline against Wayang's API and register the engines you *have*. Then it's your call. Want control? Register one engine and it runs there. Want it handled? Register several and let the cost-based optimizer pick the best one for each step, even splitting a single job across engines.
 
 **Supported platforms today**
 
@@ -117,17 +117,17 @@ It executes locally. Good for development, tests, and small data.
 Now run the *exact same pipeline* on Spark instead of locally. You don't touch the pipeline — you change which platform you register: comment out Java and register Spark.
 
 ```java
-import org.apache.wayang.spark.Spark;               // ← swap the import
+import org.apache.wayang.spark.Spark;               // swap the import
 
 // Same pipeline as before — only the registered platform changed.
 WayangContext wayang = new WayangContext(new Configuration())
-        // .withPlugin(Java.basicPlugin())           // ← comment out the local engine
-        .withPlugin(Spark.basicPlugin());            // ← register Spark instead
+        // .withPlugin(Java.basicPlugin())           // comment out the local engine
+        .withPlugin(Spark.basicPlugin());            // register Spark instead
 ```
 
-Run it again. The same pipeline now executes on Spark — you changed *where* it runs without changing *what* it does. Switch to Flink or any other supported platform the same way: swap the import and the registered plugin.
+Run it again. The same pipeline now executes on Spark. You changed *where* it runs without changing *what* it does. Switch to Flink or any other supported platform the same way: swap the import and the registered plugin.
 
-> **Why register only Spark here?** Wayang's real power is registering several platforms and letting the optimizer pick. But on small test data the optimizer will almost always pick the local engine — Spark's startup overhead isn't worth it for a tiny file — so you'd never actually see Spark run. Registering Spark alone forces the issue so you can confirm it works. Step 3 shows the production pattern.
+> **Why register only Spark here?** Wayang's real power is registering several platforms and letting the optimizer pick. But on small test data the optimizer will almost always pick the local engine (Spark's startup overhead isn't worth it for a tiny file) so you'd never actually see Spark run. Registering Spark alone forces the issue so you can confirm it works. Step 3 shows the production pattern.
 
 ### 3. Register both and let the optimizer choose
 
@@ -140,7 +140,7 @@ WayangContext wayang = new WayangContext(new Configuration())
         .withPlugin(Spark.basicPlugin());
 ```
 
-Now Wayang owns the placement decision. For each operator it estimates the cost on every registered platform and picks the cheapest — keeping a small job entirely local, pushing a large one onto Spark, or mixing both within the same job as the data demands. On a tiny input you'll see it keep everything local (that's the optimizer working correctly, not ignoring Spark); cross-platform splits show up once the data is big enough to justify them.
+Now Wayang owns the placement decision. For each operator it estimates the cost on every registered platform and picks the cheapest, keeping a small job entirely local, pushing a large one onto Spark, or mixing both within the same job as the data and query demands. On a tiny input you'll see it keep everything local (that's the optimizer working correctly, not ignoring Spark); cross-platform splits show up once the data is big enough to justify them.
 
 ## Install
 
@@ -280,8 +280,6 @@ If you're looking for somewhere to begin, doc improvements, new operators, and a
 
 - **Mailing lists** — [https://wayang.apache.org/docs/community/mailinglist](https://wayang.apache.org/docs/community/mailinglist) (user and dev)
 - **LinkedIn** — [Apache Wayang](https://www.linkedin.com/company/apachewayang)
-- **Twitter** — [@apachewayang](https://twitter.com/apachewayang)
-
 
 ## Authors
 
