@@ -49,7 +49,9 @@ public class SqlTypeUtils {
         defaultMap.put(double.class, "DOUBLE");
         defaultMap.put(Float.class, "FLOAT");
         defaultMap.put(float.class, "FLOAT");
-        defaultMap.put(BigDecimal.class, "NUMERIC");
+        // Explicit precision/scale (matches Spark's DecimalType default); a bare
+        // NUMERIC defaults to scale 0 on most engines and would truncate decimals.
+        defaultMap.put(BigDecimal.class, "NUMERIC(38,18)");
         defaultMap.put(Boolean.class, "BOOLEAN");
         defaultMap.put(boolean.class, "BOOLEAN");
         defaultMap.put(String.class, "VARCHAR(255)");

@@ -141,7 +141,9 @@ public class SparkTableSink<T> extends TableSink<T> implements SparkExecutionOpe
         return ExecutionOperator.modelEagerExecution(inputs, outputs, operatorContext);
     }
 
-    private org.apache.spark.sql.types.DataType getSparkDataType(Class<?> cls) {
+    // Package-private (not private) so SparkTableSinkTest can unit-test this
+    // Java-class -> Spark DataType mapping directly; it uses no instance state.
+    org.apache.spark.sql.types.DataType getSparkDataType(Class<?> cls) {
         if (cls == Integer.class || cls == int.class)
             return DataTypes.IntegerType;
         if (cls == Long.class || cls == long.class)
