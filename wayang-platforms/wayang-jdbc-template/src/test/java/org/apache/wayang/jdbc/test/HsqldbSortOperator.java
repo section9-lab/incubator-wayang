@@ -19,23 +19,22 @@
 package org.apache.wayang.jdbc.test;
 
 import org.apache.wayang.basic.data.Record;
-import org.apache.wayang.jdbc.operators.JdbcJoinOperator;
 import org.apache.wayang.core.function.TransformationDescriptor;
+import org.apache.wayang.jdbc.operators.JdbcFilterOperator;
+import org.apache.wayang.jdbc.operators.JdbcSortOperator;
+import org.apache.wayang.jdbc.platform.JdbcPlatformTemplate;
 
 /**
- * Test implementation of {@link JdbcJoinOperator}.
+ * Test implementation of {@link JdbcFilterOperator}.
  */
-public class HsqldbJoinOperator<KeyType> extends JdbcJoinOperator<KeyType> {
 
-    public HsqldbJoinOperator(
-        TransformationDescriptor<Record, KeyType> keyDescriptor0,
-        TransformationDescriptor<Record, KeyType> keyDescriptor1
-    ) {
-        super(keyDescriptor0,keyDescriptor1);
+public class HsqldbSortOperator extends JdbcSortOperator {
+    public HsqldbSortOperator(final TransformationDescriptor<Record, Record> keyDescriptor) {
+        super(keyDescriptor);
     }
 
     @Override
-    public HsqldbPlatform getPlatform() {
+    public JdbcPlatformTemplate getPlatform() {
         return HsqldbPlatform.getInstance();
     }
 

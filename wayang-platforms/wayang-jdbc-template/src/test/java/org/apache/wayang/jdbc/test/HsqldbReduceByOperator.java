@@ -18,25 +18,22 @@
 
 package org.apache.wayang.jdbc.test;
 
-import org.apache.wayang.basic.data.Record;
-import org.apache.wayang.jdbc.operators.JdbcJoinOperator;
+import org.apache.wayang.core.function.ReduceDescriptor;
 import org.apache.wayang.core.function.TransformationDescriptor;
+import org.apache.wayang.jdbc.operators.JdbcReduceByOperator;
+import org.apache.wayang.basic.data.Record;
 
 /**
- * Test implementation of {@link JdbcJoinOperator}.
+ * Test implementation of {@link JdbcReduceByOperator}.
  */
-public class HsqldbJoinOperator<KeyType> extends JdbcJoinOperator<KeyType> {
-
-    public HsqldbJoinOperator(
-        TransformationDescriptor<Record, KeyType> keyDescriptor0,
-        TransformationDescriptor<Record, KeyType> keyDescriptor1
-    ) {
-        super(keyDescriptor0,keyDescriptor1);
+public class HsqldbReduceByOperator extends JdbcReduceByOperator {
+    public HsqldbReduceByOperator(final TransformationDescriptor<Record, Record> keyDescriptor,
+            final ReduceDescriptor<Record> reduceDescriptor) {
+        super(keyDescriptor, reduceDescriptor);
     }
 
     @Override
     public HsqldbPlatform getPlatform() {
         return HsqldbPlatform.getInstance();
     }
-
 }
