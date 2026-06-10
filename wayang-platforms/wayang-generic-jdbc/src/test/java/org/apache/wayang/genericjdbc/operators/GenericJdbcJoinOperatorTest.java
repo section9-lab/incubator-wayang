@@ -46,6 +46,11 @@ class GenericJdbcJoinOperatorTest {
     void testJoinSqlGeneration() {
 
         Configuration configuration = new Configuration();
+        
+        configuration.setProperty("wayang.genericjdbc.jdbc.url", "jdbc:hsqldb:mem:wayang_test_db_filter;DB_CLOSE_DELAY=-1");
+        configuration.setProperty("wayang.genericjdbc.jdbc.user", "SA");
+        configuration.setProperty("wayang.genericjdbc.jdbc.password", "");
+        configuration.setProperty("wayang.genericjdbc.jdbc.driverName", "org.hsqldb.jdbcDriver");
 
         Job job = mock(Job.class);
         when(job.getConfiguration()).thenReturn(configuration);
